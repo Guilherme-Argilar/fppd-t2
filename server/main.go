@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"jogo/common"
 	"net"
 	"net/rpc"
 	"os"
@@ -13,22 +14,22 @@ import (
 )
 
 var (
-	Parede    = Elemento{'▤', termbox.ColorBlack | termbox.AttrBold | termbox.AttrDim, termbox.ColorDarkGray, true}
-	Vegetacao = Elemento{'♣', termbox.ColorGreen, termbox.ColorDefault, false}
-	Vazio     = Elemento{' ', termbox.ColorDefault, termbox.ColorDefault, false}
+	Parede    = common.Elemento{'▤', termbox.ColorBlack | termbox.AttrBold | termbox.AttrDim, termbox.ColorDarkGray, true}
+	Vegetacao = common.Elemento{'♣', termbox.ColorGreen, termbox.ColorDefault, false}
+	Vazio     = common.Elemento{' ', termbox.ColorDefault, termbox.ColorDefault, false}
 )
 
 type GameServer struct {
-	mutex               sync.Mutex
-	state               GameState
-	nextPlayerID        int
-	lastProcessedCmd    map[int]int64
+	mutex            sync.Mutex
+	state            common.GameState
+	nextPlayerID     int
+	lastProcessedCmd map[int]int64
 }
 
 func NewGameServer(mapFile string) *GameServer {
 	server := &GameServer{
-		state: GameState{
-			Players: make(map[int]Player),
+		state: common.GameState{
+			Players: make(map[int]common.Player),
 		},
 		nextPlayerID:     1,
 		lastProcessedCmd: make(map[int]int64),
@@ -48,9 +49,9 @@ func (s *GameServer) loadMap(filename string) error {
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		var row []Elemento
+		var row []common.Elemento
 		for _, char := range scanner.Text() {
-			var elem Elemento
+			var elem common.Elemento
 			switch char {
 			case Parede.Simbolo:
 				elem = Parede
@@ -66,18 +67,18 @@ func (s *GameServer) loadMap(filename string) error {
 	return scanner.Err()
 }
 
-func (s *GameServer) Connect(args *ConnectArgs, reply *ConnectReply) error {
+func (s *GameServer) Connect(args *common.ConnectArgs, reply *common.ConnectReply) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
 	playerID := s.nextPlayerID
 	s.nextPlayerID++
 
-	player := Player{
-		ID: playerID,
-		X:  2,
-		Y:  12,
-		Icono: Elemento{'☺', termbox.ColorWhite, termbox.ColorDefault, true},
+	player := common.Player{
+		ID:    playerID,
+		X:     2,
+		Y:     12,
+		Icono: common.Elemento{'☺', termbox.ColorWhite, termbox.ColorDefault, true},
 	}
 	s.state.Players[playerID] = player
 	s.lastProcessedCmd[playerID] = 0
@@ -89,7 +90,7 @@ func (s *GameServer) Connect(args *ConnectArgs, reply *ConnectReply) error {
 	return nil
 }
 
-func (s *GameServer) Move(args *MoveArgs, reply *MoveReply) error {
+func (s *GameServer) Move(args *common.MoveArgs, reply *common.MoveReply) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -124,7 +125,6 @@ func (s *GameServer) Move(args *MoveArgs, reply *MoveReply) error {
 		s.state.Players[args.PlayerID] = player
 		s.lastProcessedCmd[args.PlayerID] = args.SequenceNumber
 		reply.Success = true
-		log.Printf("Jogador %d moveu-se para (%d, %d)", args.PlayerID, nx, ny)
 	} else {
 		reply.Success = false
 	}
@@ -132,7 +132,7 @@ func (s *GameServer) Move(args *MoveArgs, reply *MoveReply) error {
 	return nil
 }
 
-func (s *GameServer) GetState(args *GetStateArgs, reply *GetStateReply) error {
+func (s *GameServer) GetState(args *common.GetStateArgs, reply *common.GetStateReply) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	reply.State = s.state

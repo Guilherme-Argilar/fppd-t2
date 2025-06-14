@@ -1,4 +1,4 @@
-package main
+package common
 
 import "github.com/nsf/termbox-go"
 
@@ -30,9 +30,9 @@ type ConnectReply struct {
 }
 
 type MoveArgs struct {
-	PlayerID      int
+	PlayerID       int
 	SequenceNumber int64
-	Direction     rune
+	Direction      rune
 }
 
 type MoveReply struct {

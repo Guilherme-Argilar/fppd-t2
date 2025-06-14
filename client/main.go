@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"jogo/common"
 	"net/rpc"
 	"os"
 	"sync"
@@ -13,7 +14,7 @@ import (
 type GameClient struct {
 	client         *rpc.Client
 	playerID       int
-	state          GameState
+	state          common.GameState
 	mutex          sync.RWMutex
 	sequenceNumber int64
 }
@@ -41,8 +42,8 @@ func (c *GameClient) draw() {
 
 func (c *GameClient) pollState() {
 	for {
-		var reply GetStateReply
-		err := c.client.Call("GameServer.GetState", &GetStateArgs{}, &reply)
+		var reply common.GetStateReply
+		err := c.client.Call("GameServer.GetState", &common.GetStateArgs{}, &reply)
 		if err != nil {
 			log.Printf("Erro ao buscar estado: %v", err)
 			time.Sleep(1 * time.Second)
@@ -58,12 +59,12 @@ func (c *GameClient) pollState() {
 
 func (c *GameClient) move(direction rune) {
 	c.sequenceNumber++
-	args := &MoveArgs{
-		PlayerID:      c.playerID,
+	args := &common.MoveArgs{
+		PlayerID:       c.playerID,
 		SequenceNumber: c.sequenceNumber,
-		Direction:     direction,
+		Direction:      direction,
 	}
-	var reply MoveReply
+	var reply common.MoveReply
 	err := c.client.Call("GameServer.Move", args, &reply)
 	if err != nil {
 		log.Printf("Erro ao mover: %v", err)
@@ -78,11 +79,11 @@ func main() {
 
 	client, err := rpc.Dial("tcp", serverAddress)
 	if err != nil {
-		log.Fatalf("Falha ao conectar ao servidor: %v", err)
+		log.Fatalf("Falha ao conectar ao servidor em %s: %v", serverAddress, err)
 	}
 
-	var connReply ConnectReply
-	err = client.Call("GameServer.Connect", &ConnectArgs{}, &connReply)
+	var connReply common.ConnectReply
+	err = client.Call("GameServer.Connect", &common.ConnectArgs{}, &connReply)
 	if err != nil {
 		log.Fatalf("Falha ao registrar no servidor: %v", err)
 	}
