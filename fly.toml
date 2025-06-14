@@ -1,0 +1,17 @@
+# fly.toml
+app = 'meu-jogo-fppd'
+primary_region = 'gru'
+
+[build]
+  builder = "paketobuildpacks/builder:base"
+
+[[services]]
+  internal_port = 12345
+  protocol = "tcp"
+
+  [services.concurrency]
+    hard_limit = 25
+    soft_limit = 20
+
+  [[services.ports]]
+    port = 12345
