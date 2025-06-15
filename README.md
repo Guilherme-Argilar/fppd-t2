@@ -38,19 +38,28 @@ O projeto foi reestruturado em um modelo cliente-servidor para suportar múltipl
     * Clone este repositório para a sua máquina.
 
 2.  **Instalar Dependências:**
-    Na pasta raiz do projeto, execute o comando abaixo para baixar as dependências listadas no `go.mod`.
     ```bash
-    go mod tidy
+    go mod init jogo
+    ```
+    ```bash
+    go get -u github.com/nsf/termbox-go
     ```
 
 3.  **Compilar o Servidor e o Cliente:**
     Execute os seguintes comandos na raiz do projeto para criar os executáveis.
     ```bash
+    # Linux
     # Compila o servidor
     go build -o servidor ./server
 
     # Compila o cliente
     go build -o cliente ./client
+
+    # Windows
+    # Compila o servidor
+    go build -o servidor.exe ./server
+    # Compila o cliente
+    go build -o cliente.exe ./client
     ```
 
 4.  **Executar o Jogo:**
