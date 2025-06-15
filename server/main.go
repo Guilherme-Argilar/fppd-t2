@@ -3,110 +3,116 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"jogo/comum"
 	"log"
-	"jogo/common"
 	"net"
 	"net/rpc"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/nsf/termbox-go"
 )
 
 var (
-	Parede    = common.Elemento{Simbolo: '▤', Cor: termbox.ColorBlack | termbox.AttrBold | termbox.AttrDim, CorFundo: termbox.ColorDarkGray, Tangivel: true}
-	Vegetacao = common.Elemento{Simbolo: '♣', Cor: termbox.ColorGreen, CorFundo: termbox.ColorDefault, Tangivel: false}
-	Vazio     = common.Elemento{Simbolo: ' ', Cor: termbox.ColorDefault, CorFundo: termbox.ColorDefault, Tangivel: false}
+	Parede    = comum.Elemento{Simbolo: '▤', Cor: termbox.ColorBlack | termbox.AttrBold | termbox.AttrDim, CorFundo: termbox.ColorDarkGray, Tangivel: true}
+	Vegetacao = comum.Elemento{Simbolo: '♣', Cor: termbox.ColorGreen, CorFundo: termbox.ColorDefault, Tangivel: false}
+	Vazio     = comum.Elemento{Simbolo: ' ', Cor: termbox.ColorDefault, CorFundo: termbox.ColorDefault, Tangivel: false}
 )
 
-type GameServer struct {
-	mutex            sync.Mutex
-	state            common.GameState
-	nextPlayerID     int
-	lastProcessedCmd map[int]int64
+
+type ServidorJogo struct {
+	mutex               sync.Mutex
+	estado              comum.EstadoJogo
+	proximoIDJogador    int
+	ultimoCmdProcessado map[int]int64
+	ultimoPing          map[int]time.Time
 }
 
-func NewGameServer(mapFile string) *GameServer {
-	server := &GameServer{
-		state: common.GameState{
-			Players: make(map[int]common.Player),
+
+func NovoServidorJogo(arquivoMapa string) *ServidorJogo {
+	servidor := &ServidorJogo{
+		estado: comum.EstadoJogo{
+			Jogadores: make(map[int]comum.Jogador),
 		},
-		nextPlayerID:     1,
-		lastProcessedCmd: make(map[int]int64),
+		proximoIDJogador:    1,
+		ultimoCmdProcessado: make(map[int]int64),
+		ultimoPing:          make(map[int]time.Time),
 	}
-	if err := server.loadMap(mapFile); err != nil {
+	if err := servidor.carregarMapa(arquivoMapa); err != nil {
 		log.Fatalf("Falha ao carregar o mapa: %v", err)
 	}
-	return server
+	return servidor
 }
 
-func (s *GameServer) loadMap(filename string) error {
-	file, err := os.Open(filename)
+func (s *ServidorJogo) carregarMapa(nomeArquivo string) error {
+	arquivo, err := os.Open(nomeArquivo)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer arquivo.Close()
 
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(arquivo)
 	for scanner.Scan() {
-		var row []common.Elemento
-		for _, char := range scanner.Text() {
-			var elem common.Elemento
-			switch char {
+		var linha []comum.Elemento
+		for _, caractere := range scanner.Text() {
+			var elemento comum.Elemento
+			switch caractere {
 			case Parede.Simbolo:
-				elem = Parede
+				elemento = Parede
 			case Vegetacao.Simbolo:
-				elem = Vegetacao
+				elemento = Vegetacao
 			default:
-				elem = Vazio
+				elemento = Vazio
 			}
-			row = append(row, elem)
+			linha = append(linha, elemento)
 		}
-		s.state.Mapa = append(s.state.Mapa, row)
+		s.estado.Mapa = append(s.estado.Mapa, linha)
 	}
 	return scanner.Err()
 }
 
-func (s *GameServer) Connect(args *common.ConnectArgs, reply *common.ConnectReply) error {
+func (s *ServidorJogo) Conectar(args *comum.ArgsConexao, resposta *comum.RespostaConexao) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	playerID := s.nextPlayerID
-	s.nextPlayerID++
+	idJogador := s.proximoIDJogador
+	s.proximoIDJogador++
 
-	player := common.Player{
-		ID:    playerID,
+	jogador := comum.Jogador{
+		ID:    idJogador,
 		X:     2,
 		Y:     12,
-		Icono: common.Elemento{Simbolo: '☺', Cor: termbox.ColorWhite, CorFundo: termbox.ColorDefault, Tangivel: true},
+		Icone: comum.Elemento{Simbolo: '☺', Cor: termbox.ColorWhite, CorFundo: termbox.ColorDefault, Tangivel: true},
 	}
-	s.state.Players[playerID] = player
-	s.lastProcessedCmd[playerID] = 0
+	s.estado.Jogadores[idJogador] = jogador
+	s.ultimoCmdProcessado[idJogador] = 0
+	s.ultimoPing[idJogador] = time.Now()
 
-	reply.PlayerID = playerID
-	reply.State = s.state
+	resposta.IDJogador = idJogador
+	resposta.Estado = s.estado
 
-	log.Printf("Jogador %d conectado.", playerID)
+	log.Printf("Jogador %d conectado.", idJogador)
 	return nil
 }
 
-func (s *GameServer) Move(args *common.MoveArgs, reply *common.MoveReply) error {
+func (s *ServidorJogo) Mover(args *comum.ArgsMovimento, resposta *comum.RespostaMovimento) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	if args.SequenceNumber <= s.lastProcessedCmd[args.PlayerID] {
-		reply.Success = true
+	if args.NumeroSequencia <= s.ultimoCmdProcessado[args.IDJogador] {
+		resposta.Sucesso = true
 		return nil
 	}
 
-	player, ok := s.state.Players[args.PlayerID]
+	jogador, ok := s.estado.Jogadores[args.IDJogador]
 	if !ok {
-		reply.Success = false
-		return fmt.Errorf("jogador com ID %d não encontrado", args.PlayerID)
+		resposta.Sucesso = false
+		return fmt.Errorf("jogador com ID %d não encontrado", args.IDJogador)
 	}
 
 	dx, dy := 0, 0
-	switch args.Direction {
+	switch args.Direcao {
 	case 'w':
 		dy = -1
 	case 'a':
@@ -117,58 +123,86 @@ func (s *GameServer) Move(args *common.MoveArgs, reply *common.MoveReply) error 
 		dx = 1
 	}
 
-	nx, ny := player.X+dx, player.Y+dy
+	nx, ny := jogador.X+dx, jogador.Y+dy
 
-	if s.canMoveTo(nx, ny) {
-		player.X = nx
-		player.Y = ny
-		s.state.Players[args.PlayerID] = player
-		s.lastProcessedCmd[args.PlayerID] = args.SequenceNumber
-		reply.Success = true
+	if s.podeMoverPara(nx, ny) {
+		jogador.X = nx
+		jogador.Y = ny
+		s.estado.Jogadores[args.IDJogador] = jogador
+		s.ultimoCmdProcessado[args.IDJogador] = args.NumeroSequencia
+		resposta.Sucesso = true
 	} else {
-		reply.Success = false
+		resposta.Sucesso = false
 	}
 
 	return nil
 }
 
-func (s *GameServer) GetState(args *common.GetStateArgs, reply *common.GetStateReply) error {
+func (s *ServidorJogo) ObterEstado(args *comum.ArgsEstado, resposta *comum.RespostaEstado) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	reply.State = s.state
+	resposta.Estado = s.estado
 	return nil
 }
 
-func (s *GameServer) canMoveTo(x, y int) bool {
-	if y < 0 || y >= len(s.state.Mapa) || x < 0 || x >= len(s.state.Mapa[y]) {
+func (s *ServidorJogo) Ping(args *comum.ArgsPing, resposta *comum.RespostaPing) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	if _, ok := s.estado.Jogadores[args.IDJogador]; ok {
+		s.ultimoPing[args.IDJogador] = time.Now()
+	}
+	return nil
+}
+
+func (s *ServidorJogo) podeMoverPara(x, y int) bool {
+	if y < 0 || y >= len(s.estado.Mapa) || x < 0 || x >= len(s.estado.Mapa[y]) {
 		return false
 	}
-	if s.state.Mapa[y][x].Tangivel {
+	if s.estado.Mapa[y][x].Tangivel {
 		return false
 	}
-	for _, p := range s.state.Players {
-		if p.X == x && p.Y == y {
+	for _, j := range s.estado.Jogadores {
+		if j.X == x && j.Y == y {
 			return false
 		}
 	}
 	return true
 }
 
+func (s *ServidorJogo) verificarJogadoresAtivos() {
+	for {
+		time.Sleep(5 * time.Second)
+
+		s.mutex.Lock()
+		for id, ultimoPing := range s.ultimoPing {
+			if time.Since(ultimoPing) > 10*time.Second {
+				log.Printf("Jogador %d desconectado por inatividade.", id)
+				delete(s.estado.Jogadores, id)
+				delete(s.ultimoPing, id)
+			}
+		}
+		s.mutex.Unlock()
+	}
+}
+
 func main() {
-	mapFile := "mapa.txt"
+	arquivoMapa := "mapa.txt"
 	if len(os.Args) > 1 {
-		mapFile = os.Args[1]
+		arquivoMapa = os.Args[1]
 	}
 
-	server := NewGameServer(mapFile)
-	rpc.Register(server)
+	servidor := NovoServidorJogo(arquivoMapa)
+	rpc.Register(servidor)
 
-	listener, err := net.Listen("tcp", ":12345")
+	go servidor.verificarJogadoresAtivos()
+
+	escuta, err := net.Listen("tcp", ":12345")
 	if err != nil {
 		log.Fatalf("Falha ao iniciar o servidor: %v", err)
 	}
-	defer listener.Close()
+	defer escuta.Close()
 
 	log.Println("Servidor de jogo iniciado na porta 12345")
-	rpc.Accept(listener)
+	rpc.Accept(escuta)
 }

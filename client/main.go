@@ -1,8 +1,8 @@
 package main
 
 import (
+	"jogo/comum"
 	"log"
-	"jogo/common"
 	"net/rpc"
 	"os"
 	"sync"
@@ -11,87 +11,103 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
-type GameClient struct {
-	client         *rpc.Client
-	playerID       int
-	state          common.GameState
-	mutex          sync.RWMutex
-	sequenceNumber int64
+// ClienteJogo gerencia todo o estado e a lógica do cliente.
+type ClienteJogo struct {
+	cliente         *rpc.Client
+	idJogador       int
+	estado          comum.EstadoJogo
+	mutex           sync.RWMutex
+	numeroSequencia int64
 }
 
-func (c *GameClient) draw() {
+func (c *ClienteJogo) desenhar() {
 	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
-	if c.state.Mapa == nil {
+	if c.estado.Mapa == nil {
 		return
 	}
 
-	for y, row := range c.state.Mapa {
-		for x, elem := range row {
-			termbox.SetCell(x, y, elem.Simbolo, elem.Cor, elem.CorFundo)
+	for y, linha := range c.estado.Mapa {
+		for x, elemento := range linha {
+			termbox.SetCell(x, y, elemento.Simbolo, elemento.Cor, elemento.CorFundo)
 		}
 	}
 
-	for _, player := range c.state.Players {
-		termbox.SetCell(player.X, player.Y, player.Icono.Simbolo, player.Icono.Cor, player.Icono.CorFundo)
+	for _, jogador := range c.estado.Jogadores {
+		termbox.SetCell(jogador.X, jogador.Y, jogador.Icone.Simbolo, jogador.Icone.Cor, jogador.Icone.CorFundo)
 	}
 	termbox.Flush()
 }
 
-func (c *GameClient) pollState() {
+func (c *ClienteJogo) buscarEstadoPeriodicamente() {
 	for {
-		var reply common.GetStateReply
-		err := c.client.Call("GameServer.GetState", &common.GetStateArgs{}, &reply)
+		var resposta comum.RespostaEstado
+		err := c.cliente.Call("ServidorJogo.ObterEstado", &comum.ArgsEstado{}, &resposta)
 		if err != nil {
 			log.Printf("Erro ao buscar estado: %v", err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
 		c.mutex.Lock()
-		c.state = reply.State
+		c.estado = resposta.Estado
 		c.mutex.Unlock()
-		c.draw()
+		c.desenhar()
 		time.Sleep(100 * time.Millisecond)
 	}
 }
 
-func (c *GameClient) move(direction rune) {
-	c.sequenceNumber++
-	args := &common.MoveArgs{
-		PlayerID:       c.playerID,
-		SequenceNumber: c.sequenceNumber,
-		Direction:      direction,
+func (c *ClienteJogo) enviarPingPeriodicamente() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		args := &comum.ArgsPing{IDJogador: c.idJogador}
+		var resposta comum.RespostaPing
+		err := c.cliente.Call("ServidorJogo.Ping", args, &resposta)
+		if err != nil {
+			log.Println("Falha ao enviar ping, a conexão com o servidor pode ter sido perdida.")
+			return
+		}
 	}
-	var reply common.MoveReply
-	err := c.client.Call("GameServer.Move", args, &reply)
+}
+
+func (c *ClienteJogo) mover(direcao rune) {
+	c.numeroSequencia++
+	args := &comum.ArgsMovimento{
+		IDJogador:       c.idJogador,
+		NumeroSequencia: c.numeroSequencia,
+		Direcao:         direcao,
+	}
+	var resposta comum.RespostaMovimento
+	err := c.cliente.Call("ServidorJogo.Mover", args, &resposta)
 	if err != nil {
 		log.Printf("Erro ao mover: %v", err)
 	}
 }
 
 func main() {
-	serverAddress := "localhost:12345"
+	enderecoServidor := "localhost:12345"
 	if len(os.Args) > 1 {
-		serverAddress = os.Args[1]
+		enderecoServidor = os.Args[1]
 	}
 
-	client, err := rpc.Dial("tcp", serverAddress)
+	clienteRPC, err := rpc.Dial("tcp", enderecoServidor)
 	if err != nil {
-		log.Fatalf("Falha ao conectar ao servidor em %s: %v", serverAddress, err)
+		log.Fatalf("Falha ao conectar ao servidor em %s: %v", enderecoServidor, err)
 	}
 
-	var connReply common.ConnectReply
-	err = client.Call("GameServer.Connect", &common.ConnectArgs{}, &connReply)
+	var respostaConexao comum.RespostaConexao
+	err = clienteRPC.Call("ServidorJogo.Conectar", &comum.ArgsConexao{}, &respostaConexao)
 	if err != nil {
 		log.Fatalf("Falha ao registrar no servidor: %v", err)
 	}
 
-	gameClient := &GameClient{
-		client:   client,
-		playerID: connReply.PlayerID,
-		state:    connReply.State,
+	clienteJogo := &ClienteJogo{
+		cliente:   clienteRPC,
+		idJogador: respostaConexao.IDJogador,
+		estado:    respostaConexao.Estado,
 	}
 
 	if err := termbox.Init(); err != nil {
@@ -99,9 +115,10 @@ func main() {
 	}
 	defer termbox.Close()
 
-	go gameClient.pollState()
+	go clienteJogo.buscarEstadoPeriodicamente()
+	go clienteJogo.enviarPingPeriodicamente()
 
-	gameClient.draw()
+	clienteJogo.desenhar()
 
 	for {
 		switch ev := termbox.PollEvent(); ev.Type {
@@ -111,7 +128,7 @@ func main() {
 			}
 			switch ev.Ch {
 			case 'w', 'a', 's', 'd':
-				gameClient.move(ev.Ch)
+				clienteJogo.mover(ev.Ch)
 			}
 		case termbox.EventError:
 			panic(ev.Err)
