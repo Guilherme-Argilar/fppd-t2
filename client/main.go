@@ -11,7 +11,6 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
-// ClienteJogo gerencia todo o estado e a lógica do cliente.
 type ClienteJogo struct {
 	cliente         *rpc.Client
 	idJogador       int
@@ -124,6 +123,10 @@ func main() {
 		switch ev := termbox.PollEvent(); ev.Type {
 		case termbox.EventKey:
 			if ev.Key == termbox.KeyEsc {
+				argsDesconexao := &comum.ArgsDesconexao{IDJogador: clienteJogo.idJogador}
+				var respostaDesconexao comum.RespostaDesconexao
+				_ = clienteJogo.cliente.Call("ServidorJogo.Desconectar", argsDesconexao, &respostaDesconexao)
+
 				return
 			}
 			switch ev.Ch {

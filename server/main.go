@@ -53,6 +53,7 @@ func (s *ServidorJogo) carregarMapa(nomeArquivo string) error {
 	defer arquivo.Close()
 
 	scanner := bufio.NewScanner(arquivo)
+	log.Printf("Carregando mapa do arquivo: %s", nomeArquivo)
 	for scanner.Scan() {
 		var linha []comum.Elemento
 		for _, caractere := range scanner.Text() {
@@ -92,15 +93,33 @@ func (s *ServidorJogo) Conectar(args *comum.ArgsConexao, resposta *comum.Respost
 	resposta.IDJogador = idJogador
 	resposta.Estado = s.estado
 
-	log.Printf("Jogador %d conectado.", idJogador)
+	log.Printf("EVENTO: Jogador %d conectou.", idJogador)
 	return nil
 }
+
+func (s *ServidorJogo) Desconectar(args *comum.ArgsDesconexao, resposta *comum.RespostaDesconexao) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	id := args.IDJogador
+
+	if _, ok := s.estado.Jogadores[id]; ok {
+		log.Printf("EVENTO: Jogador %d desconectou corretamente.", id)
+		delete(s.estado.Jogadores, id)
+		delete(s.ultimoPing, id)
+		delete(s.ultimoCmdProcessado, id)
+	}
+
+	return nil
+}
+
 
 func (s *ServidorJogo) Mover(args *comum.ArgsMovimento, resposta *comum.RespostaMovimento) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
 	if args.NumeroSequencia <= s.ultimoCmdProcessado[args.IDJogador] {
+		log.Printf("AÇÃO: Comando duplicado ou antigo do Jogador %d (seq: %d) ignorado.", args.IDJogador, args.NumeroSequencia)
 		resposta.Sucesso = true
 		return nil
 	}
@@ -126,12 +145,14 @@ func (s *ServidorJogo) Mover(args *comum.ArgsMovimento, resposta *comum.Resposta
 	nx, ny := jogador.X+dx, jogador.Y+dy
 
 	if s.podeMoverPara(nx, ny) {
+		log.Printf("AÇÃO: Jogador %d moveu-se para (%d, %d).", args.IDJogador, nx, ny)
 		jogador.X = nx
 		jogador.Y = ny
 		s.estado.Jogadores[args.IDJogador] = jogador
 		s.ultimoCmdProcessado[args.IDJogador] = args.NumeroSequencia
 		resposta.Sucesso = true
 	} else {
+		log.Printf("AÇÃO: Movimento do Jogador %d para (%d, %d) bloqueado.", args.IDJogador, nx, ny)
 		resposta.Sucesso = false
 	}
 
@@ -176,10 +197,11 @@ func (s *ServidorJogo) verificarJogadoresAtivos() {
 
 		s.mutex.Lock()
 		for id, ultimoPing := range s.ultimoPing {
-			if time.Since(ultimoPing) > 10*time.Second {
-				log.Printf("Jogador %d desconectado por inatividade.", id)
+			if time.Since(ultimoPing) > 15*time.Second {
+				log.Printf("EVENTO: Jogador %d desconectado por inatividade.", id)
 				delete(s.estado.Jogadores, id)
 				delete(s.ultimoPing, id)
+				delete(s.ultimoCmdProcessado, id)
 			}
 		}
 		s.mutex.Unlock()

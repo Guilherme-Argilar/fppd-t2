@@ -50,3 +50,9 @@ type ArgsPing struct {
 }
 
 type RespostaPing struct{}
+
+type ArgsDesconexao struct {
+	IDJogador int
+}
+
+type RespostaDesconexao struct{}
