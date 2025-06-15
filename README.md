@@ -1,65 +1,81 @@
-# Jogo de Terminal em Go
+Com certeza! Aqui está uma versão atualizada do arquivo `README.md` que reflete a nova estrutura cliente-servidor do projeto.
 
-Este projeto é um pequeno jogo desenvolvido em Go que roda no terminal usando a biblioteca [termbox-go](https://github.com/nsf/termbox-go). O jogador controla um personagem que pode se mover por um mapa carregado de um arquivo de texto.
+---
+
+# Jogo de Terminal Multiplayer em Go
+
+Este projeto é um jogo multiplayer que roda no terminal, desenvolvido em Go. Ele utiliza um servidor central para gerenciar o estado do jogo e múltiplos clientes que se conectam para interagir no mesmo mapa. A comunicação é feita via RPC (Remote Procedure Call) e a interface do cliente usa a biblioteca [termbox-go](https://github.com/nsf/termbox-go).
+
+## Arquitetura
+
+O projeto foi reestruturado em um modelo cliente-servidor para suportar múltiplos jogadores.
+
+- **Servidor (`/server`):** Uma aplicação de console responsável por gerenciar o estado do jogo, como a posição de todos os jogadores e as regras do mapa. Ele não possui interface gráfica.
+- **Cliente (`/client`):** A aplicação que o jogador executa. Ela renderiza o jogo, captura os comandos do teclado e se comunica com o servidor para enviar ações e receber atualizações.
+- **Comum (`/common`):** Um pacote compartilhado que contém as estruturas de dados usadas na comunicação entre o cliente e o servidor.
 
 ## Como funciona
 
-- O mapa é carregado de um arquivo `.txt` contendo caracteres que representam diferentes elementos do jogo.
-- O personagem se move com as teclas **W**, **A**, **S**, **D**.
-- Pressione **E** para interagir com o ambiente.
+- O servidor é iniciado e carrega um mapa a partir de um arquivo `.txt`.
+- Múltiplos clientes podem se conectar ao endereço do servidor.
+- O personagem se move com as teclas **W**, **A**, **S**, **D**. Os movimentos são enviados ao servidor e o estado atualizado é recebido por todos os clientes conectados.
 - Pressione **ESC** para sair do jogo.
 
-### Controles
+### Controles do Cliente
 
-| Tecla | Ação              |
-|-------|-------------------|
-| W     | Mover para cima   |
-| A     | Mover para esquerda |
-| S     | Mover para baixo  |
-| D     | Mover para direita |
-| E     | Interagir         |
-| ESC   | Sair do jogo      |
+| Tecla | Ação |
+| :--- | :--- |
+| **W** | Mover para cima |
+| **A** | Mover para a esquerda |
+| **S** | Mover para baixo |
+| **D** | Mover para a direita |
+| **ESC** | Sair do jogo |
 
-## Como compilar
+## Como Compilar e Rodar
 
-1. Instale o Go e clone este repositório.
-2. Inicialize um novo módulo "jogo":
+1.  **Pré-requisitos:**
+    * Instale o [Go](https://go.dev/doc/install).
+    * Clone este repositório para a sua máquina.
 
-```bash
-go mod init jogo
-go get -u github.com/nsf/termbox-go
-```
+2.  **Instalar Dependências:**
+    Na pasta raiz do projeto, execute o comando abaixo para baixar as dependências listadas no `go.mod`.
+    ```bash
+    go mod tidy
+    ```
 
-3. Compile o programa:
+3.  **Compilar o Servidor e o Cliente:**
+    Execute os seguintes comandos na raiz do projeto para criar os executáveis.
+    ```bash
+    # Compila o servidor
+    go build -o servidor ./server
 
-Linux:
+    # Compila o cliente
+    go build -o cliente ./client
+    ```
 
-```bash
-go build -o jogo
-```
+4.  **Executar o Jogo:**
+    Você precisará de pelo menos dois terminais abertos.
 
-Windows:
+    * **Terminal 1: Inicie o Servidor**
+        ```bash
+        ./servidor
+        ```
+        O servidor começará a rodar e aguardar por conexões na porta `12345`.
 
-```bash
-go build -o jogo.exe
-```
+    * **Terminal 2 (e outros): Inicie o Cliente**
+        Para conectar em um servidor rodando na sua própria máquina:
+        ```bash
+        ./cliente
+        ```
+        Para conectar em um servidor rodando em outra máquina na rede (substitua pelo IP do servidor):
+        ```bash
+        ./cliente <ip_do_servidor>:12345
+        ```
 
-Também é possivel compilar o projeto usando o comando `make` no Linux ou o script `build.bat` no Windows.
+## Estrutura do Projeto
 
-## Como executar
-
-1. Certifique-se de ter o arquivo `mapa.txt` com um mapa válido.
-2. Execute o programa no termimal:
-
-```bash
-./jogo
-```
-
-## Estrutura do projeto
-
-- main.go — Ponto de entrada e loop principal
-- interface.go — Entrada, saída e renderização com termbox
-- jogo.go — Estruturas e lógica do estado do jogo
-- personagem.go — Ações do jogador
-
-
+- **`server/main.go`**: Ponto de entrada e lógica principal do servidor do jogo.
+- **`client/main.go`**: Ponto de entrada e lógica principal do cliente (UI, input, etc).
+- **`common/types.go`**: Contém as estruturas de dados compartilhadas via RPC.
+- **`go.mod`**: Arquivo de definição do módulo e suas dependências.
+- **`mapa.txt`**: Arquivo de exemplo do mapa do jogo.

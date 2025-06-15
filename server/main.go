@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	Parede    = common.Elemento{'▤', termbox.ColorBlack | termbox.AttrBold | termbox.AttrDim, termbox.ColorDarkGray, true}
-	Vegetacao = common.Elemento{'♣', termbox.ColorGreen, termbox.ColorDefault, false}
-	Vazio     = common.Elemento{' ', termbox.ColorDefault, termbox.ColorDefault, false}
+	Parede    = common.Elemento{Simbolo: '▤', Cor: termbox.ColorBlack | termbox.AttrBold | termbox.AttrDim, CorFundo: termbox.ColorDarkGray, Tangivel: true}
+	Vegetacao = common.Elemento{Simbolo: '♣', Cor: termbox.ColorGreen, CorFundo: termbox.ColorDefault, Tangivel: false}
+	Vazio     = common.Elemento{Simbolo: ' ', Cor: termbox.ColorDefault, CorFundo: termbox.ColorDefault, Tangivel: false}
 )
 
 type GameServer struct {
@@ -78,7 +78,7 @@ func (s *GameServer) Connect(args *common.ConnectArgs, reply *common.ConnectRepl
 		ID:    playerID,
 		X:     2,
 		Y:     12,
-		Icono: common.Elemento{'☺', termbox.ColorWhite, termbox.ColorDefault, true},
+		Icono: common.Elemento{Simbolo: '☺', Cor: termbox.ColorWhite, CorFundo: termbox.ColorDefault, Tangivel: true},
 	}
 	s.state.Players[playerID] = player
 	s.lastProcessedCmd[playerID] = 0
