@@ -1,7 +1,3 @@
-Com certeza! Aqui está uma versão atualizada do arquivo `README.md` que reflete a nova estrutura cliente-servidor do projeto.
-
----
-
 # Jogo de Terminal Multiplayer em Go
 
 Este projeto é um jogo multiplayer que roda no terminal, desenvolvido em Go. Ele utiliza um servidor central para gerenciar o estado do jogo e múltiplos clientes que se conectam para interagir no mesmo mapa. A comunicação é feita via RPC (Remote Procedure Call) e a interface do cliente usa a biblioteca [termbox-go](https://github.com/nsf/termbox-go).
